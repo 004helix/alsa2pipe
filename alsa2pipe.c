@@ -87,7 +87,7 @@ void run(snd_pcm_t *handle, int frames,
             connected++;
         }
 
-        // send audio data to pulseaudio
+        // send audio data to pipe
         rv = write(pipefd, buffer, bufsize);
         if (rv < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {

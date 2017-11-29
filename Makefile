@@ -3,7 +3,7 @@ LD = gcc
 CFLAGS = -Wall -Werror
 LDFLAGS = -lasound
 
-EXE = pulse-alsa2pipe
+EXE = alsa2pipe
 
 $(EXE): $(EXE).c
 	$(CC) -o $@ $^ $(LDFLAGS)
