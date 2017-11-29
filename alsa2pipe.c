@@ -233,15 +233,13 @@ int main(int argc, char *argv[])
     }
 
     if ((err = snd_pcm_hw_params_set_channels(capture_handle, hw_params, channels)) < 0) {
-        fprintf(stderr,
-                "cannot set channel count (%s)\n",
+        fprintf(stderr, "cannot set channel count (%s)\n",
                 snd_strerror(err));
         return 1;
     }
 
     if ((err = snd_pcm_hw_params(capture_handle, hw_params)) < 0) {
-        fprintf(stderr,
-                "cannot set parameters (%s)\n",
+        fprintf(stderr, "cannot set parameters (%s)\n",
                 snd_strerror(err));
         return 1;
     }
@@ -249,8 +247,7 @@ int main(int argc, char *argv[])
     snd_pcm_hw_params_free(hw_params);
 
     if ((err = snd_pcm_prepare(capture_handle)) < 0) {
-        fprintf(stderr,
-                "cannot prepare audio interface for use (%s)\n",
+        fprintf(stderr, "cannot prepare audio interface for use (%s)\n",
                 snd_strerror(err));
         return 1;
     }
