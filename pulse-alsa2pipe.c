@@ -91,7 +91,8 @@ void run(snd_pcm_t *handle, int frames,
         rv = write(pipefd, buffer, bufsize);
         if (rv < 0) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                fprintf(stderr, "pipe overrun: size %u\n", (unsigned) bufsize);
+                // report override can be very noisy if source suspended
+                // fprintf(stderr, "pipe overrun: size %u\n", (unsigned) bufsize);
                 continue;
             }
             perror("pipe write");
