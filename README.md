@@ -1,4 +1,4 @@
-# Pulseaudio ALSA/SPDIF source module
+# Pulseaudio ALSA/SPDIF receiver
 
 PulseAudio's alsa-source module always is in running state if it gets
 errors from capturing device. When IEC-958 (S/PDIF) input was selected
@@ -42,8 +42,8 @@ $ echo -e '#!/bin/bash\npactl suspend-source pipe 0' > ~/bin/ondisconnect
 $ chmod +x ~/bin/onconnect ~/bin/ondisconnect
 ```
 
-start pulse-alsa-spdif
+start pulse-alsa2pipe
 ```
-$ pulse-alsa-spdif hw:0,0 s16le:48000:2 /tmp/spdif.input \
+$ pulse-alsa2pipe hw:0,0 s16le:48000:2 /tmp/spdif.input \
   onconnect ondisconnect
 ```
