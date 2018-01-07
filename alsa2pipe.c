@@ -73,6 +73,10 @@ void run(snd_pcm_t *handle, int frames,
                     runhook(ondisconnect);
             }
 
+            // device disconnected
+            if (size == -ENODEV)
+                return;
+
             sleep(1);
             continue;
         }
