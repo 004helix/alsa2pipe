@@ -79,6 +79,10 @@ void run(snd_pcm_t *handle, long frames,
                     runhook(ondisconnect);
             }
 
+            // device disconnected
+            if (size == -ENODEV)
+                return;
+
             // sleep for a second
             FD_ZERO(&rfds);
             FD_SET(pipefd, &rfds);
