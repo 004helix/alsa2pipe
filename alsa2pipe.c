@@ -1,5 +1,5 @@
 /*
- *  Copyright (C) 2017 Raman Shyshniou <rommer@ibuffed.com>
+ *  Copyright (C) 2017,2018 Raman Shyshniou <rommer@ibuffed.com>
  *  All Rights Reserved.
  *
  *  This is free software; you can redistribute it and/or modify
@@ -18,6 +18,9 @@
  *  USA.
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -51,10 +54,13 @@ void runhook(char *prog)
 }
 
 
-void run(snd_pcm_t *handle, int frames,
+void run(snd_pcm_t *handle, long frames,
          char *buffer, size_t bufsize, int pipefd)
 {
-    int size, connected = 0;
+    snd_pcm_sframes_t size;
+    int connected = 0;
+    struct timeval tv;
+    fd_set rfds;
     ssize_t rv;
 
     for (;;) {
@@ -73,7 +79,18 @@ void run(snd_pcm_t *handle, int frames,
                     runhook(ondisconnect);
             }
 
-            sleep(1);
+            // sleep for a second
+            FD_ZERO(&rfds);
+            FD_SET(pipefd, &rfds);
+            tv.tv_sec = 1;
+            tv.tv_usec = 0;
+            rv = select(pipefd + 1, &rfds, NULL, NULL, &tv);
+
+            if (rv > 0)
+                // O_WRONLY pipe is available for reading
+                // pulseaudio restarted
+                return;
+
             continue;
         }
 
@@ -89,7 +106,7 @@ void run(snd_pcm_t *handle, int frames,
 
         // send audio data to pipe
         rv = write(pipefd, buffer, bufsize);
-        if (rv < 0) {
+        if (rv == -1) {
             if (errno == EAGAIN || errno == EWOULDBLOCK) {
                 // report override can be very noisy if source suspended
                 // fprintf(stderr, "pipe overrun: size %u\n", (unsigned) bufsize);
@@ -105,8 +122,8 @@ void run(snd_pcm_t *handle, int frames,
 int main(int argc, char *argv[])
 {
     char *buffer;
+    long frames = 128;
     int pipefd, err, i;
-    unsigned frames = 128;
     unsigned rate, channels;
     snd_pcm_t *capture_handle;
     snd_pcm_hw_params_t *hw_params;
@@ -145,7 +162,7 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    if (sscanf(buffer, "%s %u %u %u",
+    if (sscanf(buffer, "%s %u %u %ld",
                sformat, &rate, &channels, &frames) < 3) {
         fprintf(stderr, "unknown format: %s\n", argv[2]);
         free(buffer);
@@ -178,6 +195,11 @@ int main(int argc, char *argv[])
     if (!strcmp(sformat, "s32be")) {
         format = SND_PCM_FORMAT_S32_BE;
     } else {
+        fprintf(stderr, "unknown frame format: %s\n", sformat);
+        return 1;
+    }
+
+    if (frames <= 0) {
         fprintf(stderr, "unknown frame format: %s\n", sformat);
         return 1;
     }
@@ -262,6 +284,8 @@ int main(int argc, char *argv[])
     run(capture_handle, frames, buffer, bufsize, pipefd);
 
     free(buffer);
+
+    close(pipefd);
 
     snd_pcm_close(capture_handle);
 
