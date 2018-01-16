@@ -70,8 +70,8 @@ void run(snd_pcm_t *handle, long frames,
         if (size != frames) {
             // error: disconnect if connected
             if (connected) {
-                fprintf(stderr, "ALSA source disconnected (%d/%d)\n",
-                        size, frames);
+                fprintf(stderr, "ALSA source disconnected (%ld/%ld)\n",
+                        (long)size, frames);
                 connected = 0;
 
                 // run disconnect hook

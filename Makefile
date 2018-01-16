@@ -6,7 +6,7 @@ LDFLAGS = -lasound
 EXE = alsa2pipe
 
 $(EXE): $(EXE).c
-	$(CC) -o $@ $^ $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
 clean:
 	rm -f $(EXE)
