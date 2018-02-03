@@ -24,6 +24,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
@@ -54,14 +55,68 @@ void runhook(char *prog)
 }
 
 
-void run(snd_pcm_t *handle, long frames,
-         char *buffer, size_t bufsize, int pipefd)
+int silent(void *buffer, snd_pcm_sframes_t frames,
+           snd_pcm_format_t format, unsigned channels)
+{
+    long i;
+
+    if (channels == 0 || frames <= channels)
+        return 1;
+
+    switch (snd_pcm_format_width(format)) {
+        case 8: {
+            int8_t *data = buffer;
+
+            for (i = channels; i < frames; i++)
+                if (data[i] != data[i % channels])
+                    return 1;
+
+            break;
+        }
+
+        case 16: {
+            int16_t *data = buffer;
+
+            for (i = channels; i < frames; i++)
+                if (data[i] != data[i % channels])
+                    return 1;
+
+            break;
+        }
+
+        case 32: {
+            int32_t *data = buffer;
+
+            for (i = channels; i < frames; i++)
+                if (data[i] != data[i % channels])
+                    return 1;
+
+            break;
+        }
+
+        default:
+            return 1;
+    }
+
+    return 0;
+}
+
+
+void run(snd_pcm_t *handle, void *buffer, long frames,
+         snd_pcm_format_t format, unsigned channels,
+         int pipefd, unsigned silence_max)
 {
     snd_pcm_sframes_t size;
-    int connected = 0;
     struct timeval tv;
+    size_t bufsize;
+    int connected;
+    int silence;
     fd_set rfds;
     ssize_t rv;
+
+    bufsize = frames * channels * (snd_pcm_format_width(format) >> 3);
+    connected = 0;
+    silence = 0;
 
     for (;;) {
         // read audio data from alsa
@@ -71,8 +126,15 @@ void run(snd_pcm_t *handle, long frames,
         if (size == 0)
             continue;
 
-        // error
-        if (size != frames) {
+        if (size == frames) {
+            // silence detection
+            if (silent(buffer, frames, format, channels)) {
+                if (silence < silence_max)
+                    silence++;
+            } else
+                silence = 0;
+
+        } else {
             // error: disconnect if connected
             if (connected) {
                 fprintf(stderr, "ALSA source disconnected (%ld/%ld)\n",
@@ -103,7 +165,18 @@ void run(snd_pcm_t *handle, long frames,
             continue;
         }
 
-        if (!connected) {
+        if (connected && silence == silence_max) {
+            fprintf(stderr, "ALSA source disconnected (silence detected)\n");
+
+            // run disconnect hook
+            if (ondisconnect)
+                runhook(ondisconnect);
+
+            silence++;
+            connected = 0;
+        }
+
+        if (!connected && silence < silence_max) {
             fprintf(stderr, "ALSA source connected\n");
 
             // run connect hook
@@ -113,16 +186,18 @@ void run(snd_pcm_t *handle, long frames,
             connected++;
         }
 
-        // send audio data to pipe
-        rv = write(pipefd, buffer, bufsize);
-        if (rv == -1) {
-            if (errno == EAGAIN || errno == EWOULDBLOCK) {
-                // report override can be very noisy if source suspended
-                // fprintf(stderr, "pipe overrun: size %u\n", (unsigned) bufsize);
-                continue;
+        if (silence < silence_max) {
+            // send audio data to pipe
+            rv = write(pipefd, buffer, bufsize);
+            if (rv == -1) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    // report override can be very noisy if source suspended
+                    // fprintf(stderr, "pipe overrun: size %u\n", (unsigned) bufsize);
+                    continue;
+                }
+                perror("pipe write");
+                return;
             }
-            perror("pipe write");
-            return;
         }
     }
 }
@@ -280,14 +355,14 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    bufsize = frames * channels * snd_pcm_format_width(format) / 8;
+    bufsize = frames * channels * (snd_pcm_format_width(format) >> 3);
     if ((buffer = malloc(bufsize)) == NULL) {
         fprintf(stderr, "cannot allocate memory\n");
         return 1;
     }
 
-    // run
-    run(capture_handle, frames, buffer, bufsize, pipefd);
+    run(capture_handle, buffer, frames, format, channels, pipefd,
+        5 * rate / frames /* 5 seconds of silence to disconnect */);
 
     free(buffer);
 
