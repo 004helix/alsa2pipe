@@ -67,6 +67,11 @@ void run(snd_pcm_t *handle, long frames,
         // read audio data from alsa
         size = snd_pcm_readi(handle, buffer, frames);
 
+        // read interrupted
+        if (size == 0)
+            continue;
+
+        // error
         if (size != frames) {
             // error: disconnect if connected
             if (connected) {
@@ -92,7 +97,7 @@ void run(snd_pcm_t *handle, long frames,
 
             if (rv > 0)
                 // O_WRONLY pipe is available for reading
-                // pulseaudio restarted
+                // pipe reader closed connection
                 return;
 
             continue;
