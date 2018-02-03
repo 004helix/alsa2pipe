@@ -61,7 +61,7 @@ int silent(void *buffer, snd_pcm_sframes_t frames,
     long i;
 
     if (channels == 0 || frames <= channels)
-        return 1;
+        return 0;
 
     switch (snd_pcm_format_width(format)) {
         case 8: {
@@ -69,7 +69,7 @@ int silent(void *buffer, snd_pcm_sframes_t frames,
 
             for (i = channels; i < frames; i++)
                 if (data[i] != data[i % channels])
-                    return 1;
+                    return 0;
 
             break;
         }
@@ -79,7 +79,7 @@ int silent(void *buffer, snd_pcm_sframes_t frames,
 
             for (i = channels; i < frames; i++)
                 if (data[i] != data[i % channels])
-                    return 1;
+                    return 0;
 
             break;
         }
@@ -89,16 +89,16 @@ int silent(void *buffer, snd_pcm_sframes_t frames,
 
             for (i = channels; i < frames; i++)
                 if (data[i] != data[i % channels])
-                    return 1;
+                    return 0;
 
             break;
         }
 
         default:
-            return 1;
+            return 0;
     }
 
-    return 0;
+    return 1;
 }
 
 
