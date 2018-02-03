@@ -183,9 +183,6 @@ int main(int argc, char *argv[])
     if (!strcmp(sformat, "s8")) {
         format = SND_PCM_FORMAT_S8;
     } else
-    if (!strcmp(sformat, "u8")) {
-        format = SND_PCM_FORMAT_U8;
-    } else
     if (!strcmp(sformat, "s16le")) {
         format = SND_PCM_FORMAT_S16_LE;
     } else
