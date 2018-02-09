@@ -31,6 +31,7 @@
 #include <alsa/asoundlib.h>
 
 
+char *pipename = NULL;
 char *onconnect = NULL;
 char *ondisconnect = NULL;
 
@@ -104,13 +105,14 @@ int silent(void *buffer, snd_pcm_sframes_t frames,
 
 void run(snd_pcm_t *handle, void *buffer, long frames,
          snd_pcm_format_t format, unsigned channels,
-         int pipefd, unsigned silence_max)
+         unsigned silence_max)
 {
     snd_pcm_sframes_t size;
     struct timeval tv;
     size_t bufsize;
     int connected;
     int silence;
+    int pipefd;
     fd_set rfds;
     ssize_t rv;
 
@@ -144,6 +146,9 @@ void run(snd_pcm_t *handle, void *buffer, long frames,
                 // run disconnect hook
                 if (ondisconnect)
                     runhook(ondisconnect);
+
+                // close pipe
+                close(pipefd);
             }
 
             // device disconnected
@@ -172,12 +177,21 @@ void run(snd_pcm_t *handle, void *buffer, long frames,
             if (ondisconnect)
                 runhook(ondisconnect);
 
+            // close pipe
+            close(pipefd);
+
             silence++;
             connected = 0;
         }
 
         if (!connected && silence < silence_max) {
             fprintf(stderr, "ALSA source connected\n");
+
+            // open pipe
+            if ((pipefd = open(pipename, O_WRONLY | O_NONBLOCK | O_CLOEXEC)) < 0) {
+                perror("pipe open");
+                return;
+            }
 
             // run connect hook
             if (onconnect)
@@ -190,11 +204,11 @@ void run(snd_pcm_t *handle, void *buffer, long frames,
             // send audio data to pipe
             rv = write(pipefd, buffer, bufsize);
             if (rv == -1) {
-                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                if (errno == EAGAIN || errno == EWOULDBLOCK)
                     // report override can be very noisy if source suspended
                     // fprintf(stderr, "pipe overrun: size %u\n", (unsigned) bufsize);
                     continue;
-                }
+
                 perror("pipe write");
                 return;
             }
@@ -207,13 +221,13 @@ int main(int argc, char *argv[])
 {
     char *buffer;
     long frames = 128;
-    int pipefd, err, i;
     unsigned rate, channels;
     snd_pcm_t *capture_handle;
     snd_pcm_hw_params_t *hw_params;
     snd_pcm_format_t format;
     char sformat[32];
     size_t bufsize;
+    int err, i;
 
     signal(SIGPIPE, SIG_IGN);
     signal(SIGCHLD, SIG_IGN);
@@ -288,11 +302,8 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    pipefd = open(argv[3], O_WRONLY | O_NONBLOCK | O_CLOEXEC);
-    if (pipefd < 0) {
-        perror("pipe open");
-        return 1;
-    }
+    // save pipe filename
+    pipename = strdup(argv[3]);
 
     // setup connect/disconnect handlers
     if (argc > 4)
@@ -364,12 +375,10 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    run(capture_handle, buffer, frames, format, channels, pipefd,
+    run(capture_handle, buffer, frames, format, channels,
         5 * rate / frames /* 5 seconds of silence to disconnect */);
 
     free(buffer);
-
-    close(pipefd);
 
     snd_pcm_close(capture_handle);
 
