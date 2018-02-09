@@ -28,6 +28,7 @@
 #include <signal.h>
 #include <string.h>
 #include <unistd.h>
+#include <time.h>
 #include <alsa/asoundlib.h>
 
 
@@ -108,12 +109,11 @@ void run(snd_pcm_t *handle, void *buffer, long frames,
          unsigned silence_max)
 {
     snd_pcm_sframes_t size;
-    struct timeval tv;
+    struct timespec ts;
     size_t bufsize;
     int connected;
     int silence;
     int pipefd;
-    fd_set rfds;
     ssize_t rv;
 
     bufsize = frames * channels * (snd_pcm_format_width(format) >> 3);
@@ -155,18 +155,10 @@ void run(snd_pcm_t *handle, void *buffer, long frames,
             if (size == -ENODEV)
                 return;
 
-            // sleep for a second
-            FD_ZERO(&rfds);
-            FD_SET(pipefd, &rfds);
-            tv.tv_sec = 1;
-            tv.tv_usec = 0;
-            rv = select(pipefd + 1, &rfds, NULL, NULL, &tv);
-
-            if (rv > 0)
-                // O_WRONLY pipe is available for reading
-                // pipe reader closed connection
-                return;
-
+            // sleep for a second and try again
+            ts.tv_sec = 1;
+            ts.tv_nsec = 0;
+            nanosleep(&ts, NULL);
             continue;
         }
 
